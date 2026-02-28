@@ -102,6 +102,64 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function updatePortfolioAssets(balanceEth) {
+        const assetsList = document.getElementById('portfolio-assets-list');
+        if (!assetsList) return;
+
+        assetsList.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-tertiary);"><i class="fa-solid fa-spinner fa-spin"></i> Cargando activos reales...</div>';
+
+        try {
+            // Fetch real ETH price from CoinGecko
+            const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd&include_24hr_change=true');
+            const data = await response.json();
+            const ethPrice = data.ethereum.usd;
+            const ethChange = data.ethereum.usd_24h_change;
+
+            const totalFiat = parseFloat(balanceEth) * ethPrice;
+
+            // Render ETH Asset
+            assetsList.innerHTML = `
+                <div class="asset-item">
+                    <div class="asset-icon" style="background: rgba(98, 126, 234, 0.2); color: #627eea;"><i class="fa-brands fa-ethereum"></i></div>
+                    <div class="asset-details">
+                        <span class="asset-name">Ethereum (Sepolia)</span>
+                        <span class="asset-amount">${parseFloat(balanceEth).toFixed(4)} ETH</span>
+                    </div>
+                    <div class="asset-value">
+                        <span class="fiat-value">$${(parseFloat(balanceEth) * ethPrice).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <span class="asset-change ${ethChange >= 0 ? 'positive' : 'negative'}">
+                            ${ethChange >= 0 ? '+' : ''}${ethChange.toFixed(2)}%
+                        </span>
+                    </div>
+                </div>
+            `;
+
+            // Update Total Balance Card
+            if (totalBalanceAmount) {
+                totalBalanceAmount.innerHTML = `$${totalFiat.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span class="currency">USD</span>`;
+            }
+            if (balanceChangeLabel) {
+                balanceChangeLabel.style.display = 'flex';
+                balanceChangeLabel.className = `balance-change ${ethChange >= 0 ? 'positive' : 'negative'}`;
+
+                const fiatChange = (totalFiat * ethChange) / 100;
+                balanceChangeLabel.innerHTML = `
+                    <i class="fa-solid fa-arrow-trend-${ethChange >= 0 ? 'up' : 'down'}"></i> 
+                    ${ethChange >= 0 ? '+' : ''}${ethChange.toFixed(2)}% (${fiatChange >= 0 ? '+' : ''}$${Math.abs(fiatChange).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) hoy
+                `;
+            }
+
+        } catch (error) {
+            console.error("Error fetching crypto prices:", error);
+            assetsList.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-secondary);">Error al cargar activos.</div>';
+
+            // Fallback just show ETH balance
+            if (totalBalanceAmount) {
+                totalBalanceAmount.innerHTML = `${parseFloat(balanceEth).toFixed(4)} <span class="currency">ETH</span>`;
+            }
+        }
+    }
+
     async function handleSuccessfulConnection(address) {
         userAddress = address;
         provider = new ethers.BrowserProvider(window.ethereum);
@@ -124,17 +182,12 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const balanceWei = await provider.getBalance(address);
             const balanceEth = ethers.formatEther(balanceWei);
-            const roundedBalance = parseFloat(balanceEth).toFixed(4);
 
-            if (totalBalanceAmount) {
-                totalBalanceAmount.innerHTML = `${roundedBalance} <span class="currency">ETH</span>`;
-            }
             if (networkBadge) {
                 networkBadge.innerHTML = `<span class="dot" style="background-color: var(--success);"></span> Sepolia Testnet`;
             }
-            if (balanceChangeLabel) {
-                balanceChangeLabel.style.display = 'none'; // Hide the fake +2.4% change label
-            }
+
+            await updatePortfolioAssets(balanceEth);
         } catch (e) {
             console.error("Error fetching balance:", e);
         }
@@ -154,7 +207,51 @@ document.addEventListener('DOMContentLoaded', () => {
         // Reset Dashboard
         if (totalBalanceAmount) totalBalanceAmount.innerHTML = `$142,504.20 <span class="currency">USD</span>`;
         if (networkBadge) networkBadge.innerHTML = `<span class="dot"></span> Base L2`;
-        if (balanceChangeLabel) balanceChangeLabel.style.display = 'flex';
+        if (balanceChangeLabel) {
+            balanceChangeLabel.style.display = 'flex';
+            balanceChangeLabel.className = 'balance-change positive';
+            balanceChangeLabel.innerHTML = '<i class="fa-solid fa-arrow-trend-up"></i> +2.4% (+$3,420.00) today';
+        }
+
+        // Reset Portfolio Assets
+        const assetsList = document.getElementById('portfolio-assets-list');
+        if (assetsList) {
+            assetsList.innerHTML = `
+                <div class="asset-item">
+                    <div class="asset-icon btc"><i class="fa-brands fa-bitcoin"></i></div>
+                    <div class="asset-details">
+                        <span class="asset-name">Bitcoin</span>
+                        <span class="asset-amount">1.24 BTC</span>
+                    </div>
+                    <div class="asset-value">
+                        <span class="fiat-value">$80,600.00</span>
+                        <span class="asset-change positive">+4.2%</span>
+                    </div>
+                </div>
+                <div class="asset-item">
+                    <div class="asset-icon usdc"><i class="fa-solid fa-dollar-sign"></i></div>
+                    <div class="asset-details">
+                        <span class="asset-name">USDC</span>
+                        <span class="asset-amount">45,000.00 USDC</span>
+                    </div>
+                    <div class="asset-value">
+                        <span class="fiat-value">$45,000.00</span>
+                        <span class="asset-change neutral">0.0%</span>
+                    </div>
+                </div>
+                <div class="asset-item">
+                    <div class="asset-icon ars"><i class="fa-solid fa-money-bill-wave"></i></div>
+                    <div class="asset-details">
+                        <span class="asset-name">Pesos ARS (BaaS)</span>
+                        <span class="asset-amount">17,000,000 ARS</span>
+                    </div>
+                    <div class="asset-value">
+                        <span class="fiat-value">$16,904.20</span>
+                        <span class="asset-change negative">-0.5%</span>
+                    </div>
+                </div>
+            `;
+        }
     }
 
     if (connectWalletBtn) {
