@@ -285,8 +285,29 @@ document.addEventListener('DOMContentLoaded', () => {
         // 6. Basic Intent Router (Simulation & Web3)
         const cmdLower = command.toLowerCase();
 
-        // Check if waiting for an address to complete a transfer
+        // Check if waiting for an address or amount to complete a transfer
         if (pendingTx) {
+            if (!pendingTx.amount) {
+                const amountMatch = command.match(/([0-9.,]+)/);
+                if (amountMatch) {
+                    pendingTx.amount = amountMatch[1].replace(',', '.');
+                    const addressMatch = command.match(/(0x[a-fA-F0-9]{40})/i);
+                    const toAddress = addressMatch ? addressMatch[1] : pendingTx.address;
+                    if (toAddress) {
+                        executeWeb3Transfer(pendingTx.amount, toAddress);
+                        pendingTx = null;
+                    } else {
+                        appendMessage('system', `Entendido. ¿A qué dirección de wallet deseas enviar los ${pendingTx.amount} ETH?`);
+                    }
+                } else if (cmdLower.includes('cancel') || cmdLower === 'no') {
+                    pendingTx = null;
+                    appendMessage('system', 'Operación de transferencia cancelada.');
+                } else {
+                    appendMessage('system', 'Por favor, indícame la cantidad de ETH que deseas enviar. (O escribe "cancelar")');
+                }
+                return;
+            }
+
             const addressMatch = command.match(/(0x[a-fA-F0-9]{40})/i);
             if (addressMatch) {
                 const toAddress = addressMatch[1];
@@ -309,6 +330,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const sendPartialRegex = /(?:envi|transfer|mand|pas|giv)[a-záéíóú]*\s+([0-9.,]+)\s*eth/i;
         const matchPartial = command.match(sendPartialRegex);
 
+        // Regex to match general intent without amount: "quiero enviar eth"
+        const sendIntentRegex = /(?:envi|transfer|mand|pas|giv).*?eth/i;
+        const matchIntent = command.match(sendIntentRegex);
+
         if (matchFull) {
             const amount = matchFull[1].replace(',', '.'); // Handle comma as decimal separator
 
@@ -321,6 +346,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const amount = matchPartial[1].replace(',', '.');
             pendingTx = { amount };
             appendMessage('system', `Entendido. ¿A qué dirección de wallet deseas enviar los ${amount} ETH?`);
+        } else if (matchIntent) {
+            let capturedAddr = command.match(/(0x[a-fA-F0-9]{40})/i);
+            pendingTx = { amount: null, address: capturedAddr ? capturedAddr[1] : null };
+            if (pendingTx.address) {
+                appendMessage('system', `Entendido. ¿Qué cantidad de ETH deseas enviar a la dirección ${pendingTx.address.substring(0, 6)}...?`);
+            } else {
+                appendMessage('system', `Entendido. ¿Qué cantidad de ETH deseas enviar?`);
+            }
         } else if (cmdLower.includes('invert') && cmdLower.includes('100k') && cmdLower.includes('bajo riesgo')) {
             simulateInvestmentFlow();
         } else if (cmdLower.includes('btc') && cmdLower.includes('compr')) {
