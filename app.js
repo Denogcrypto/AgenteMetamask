@@ -285,6 +285,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // 6. Basic Intent Router (Simulation & Web3)
         const cmdLower = command.toLowerCase();
 
+        // PRIORIDAD 1: Búsqueda de productos (Shopping AI)
+        if (cmdLower.includes('busc') ||
+            (cmdLower.includes('cuánto cuesta') || cmdLower.includes('cuanto cuesta')) ||
+            (cmdLower.includes('precio') && !cmdLower.includes('eth') && !cmdLower.includes('btc'))) {
+            handleShoppingQuery(command);
+            return;
+        }
+
         // Check if waiting for an address or amount to complete a transfer
         if (pendingTx) {
             if (!pendingTx.amount) {
@@ -399,6 +407,10 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             // Append HTML element if it's a widget
             contentDiv.appendChild(text);
+            // Si es un widget, hacemos que el mensaje ocupe más espacio
+            msgDiv.classList.add('widget-msg');
+            contentDiv.style.width = '100%';
+            msgDiv.style.maxWidth = '100%';
         }
 
         msgDiv.appendChild(avatar);
@@ -599,5 +611,77 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function simulateSummary() {
         appendMessage('system', 'Tu balance total es equivalente a $142,504.20 USD. Esta semana generaste $3,420 en rendimientos pasivos gracias a las reglas configuradas por la IA. El 30% está alojado en USDC en Base para operaciones diarias y el 70% restante en reserva fría descentralizada a través de Multi-Sig.');
+    }
+
+    async function handleShoppingQuery(command) {
+        // Extraer el producto (simplificado)
+        // Ejemplo: "buscame el iphone 13 mas barato" -> "iphone 13"
+        let product = command.toLowerCase()
+            .replace('buscame', '')
+            .replace('buscar', '')
+            .replace('el', '')
+            .replace('la', '')
+            .replace('más', '')
+            .replace('mas', '')
+            .replace('barato', '')
+            .replace('barata', '')
+            .replace('precio', '')
+            .trim();
+
+        if (!product) {
+            appendMessage('system', '¿Qué producto te gustaría que busque? Por favor, sé específico.');
+            return;
+        }
+
+        const thinkingId = appendThinkingState();
+        // Cambiar el texto del thinking state para shopping
+        const thinkingEl = document.getElementById(thinkingId);
+        if (thinkingEl) {
+            thinkingEl.querySelector('p').innerHTML = `<i class="fa-solid fa-search fa-spin"></i> Scrapeando proxies y analizando reputación en tiempo real...`;
+        }
+
+        try {
+            const response = await fetch(`http://127.0.0.1:8000/search?q=${encodeURIComponent(product)}`);
+            const data = await response.json();
+
+            removeMessage(thinkingId);
+
+            if (data.status === 'success') {
+                const best = data.best_option;
+
+                const widget = document.createElement('div');
+                widget.className = 'ai-widget fade-in';
+                widget.innerHTML = `
+                    <div class="ai-widget-header" style="background: rgba(0, 193, 148, 0.1);">
+                        <span style="color: var(--success);"><i class="fa-solid fa-cart-shopping"></i> Mejor Oferta Encontrada</span>
+                        <span style="font-size: 0.7rem;">Scraper v1.0</span>
+                    </div>
+                    <div class="ai-widget-body">
+                        <div style="margin-bottom: 0.5rem;">
+                            <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 2px;">${best.title}</div>
+                            <div style="font-size: 0.8rem; color: var(--text-tertiary); display: flex; align-items: center; gap: 5px;">
+                                <i class="fa-solid fa-award" style="color: var(--warning);"></i> Reputación: ${best.reputation}
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+                            <div>
+                                <div style="font-size: 0.75rem; color: var(--text-tertiary);">Precio final:</div>
+                                <div style="font-size: 1.25rem; font-weight: 800; color: var(--success);">$${best.price.toLocaleString('es-AR')}</div>
+                            </div>
+                            <a href="${best.link}" target="_blank" class="widget-btn confirm" style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center; padding: 8px 15px;">Ver Producto</a>
+                        </div>
+                    </div>
+                    <div style="padding: 10px; font-size: 0.85rem; border-top: 1px solid var(--border-color); color: var(--text-secondary); font-style: italic;">
+                        "${data.ai_reasoning}"
+                    </div>
+                `;
+                appendMessage('system', widget);
+            } else {
+                appendMessage('system', `No pude encontrar ofertas confiables para "${product}". Es posible que el producto tenga poca disponibilidad o los precios sean irregulares.`);
+            }
+        } catch (error) {
+            removeMessage(thinkingId);
+            appendMessage('system', 'Hubo un error al conectar con el motor de búsqueda. Asegúrate de que el servidor de IA esté corriendo en el puerto 8000.');
+        }
     }
 });
